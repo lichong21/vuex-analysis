@@ -14,6 +14,23 @@ export default class Module {
     this.state = (typeof rawState === 'function' ? rawState() : rawState) || {}
   }
 
+	// {
+	// 	runtime: false,
+	// 	state: {},
+	// 	_children:{
+	// 		subModule1: Module {runtime: false, _children: {…}, _rawModule: {…}, state: {…}},
+	// 		subModule2: Module {runtime: false, _children: {…}, _rawModule: {…}, state: {…}}
+	// 	},
+	// 	_rawModule: {
+	// 		modules: {
+	// 			subModule1: {state: {…}, mutations: {…}}
+	// 			subModule2: {state: {…}, mutations: {…}}
+	// 		},
+	// 	},
+	// 	namespaced: false
+	// }
+	
+
   get namespaced () {
     return !!this._rawModule.namespaced
   }

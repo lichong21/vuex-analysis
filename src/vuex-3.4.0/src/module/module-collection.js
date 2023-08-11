@@ -1,6 +1,26 @@
 import Module from './module'
 import { assert, forEachValue } from '../util'
 
+// 假设传进来rawRootModule如下
+// {
+// 	state: {},
+// 	getters: {},
+// 	mutations: {},
+// 	actions: {},
+// 	modules: {
+// 		subModule1: {
+// 			state: {},
+// 			getters: {},
+// 			mutations: {},
+// 			actions: {},
+//    },
+// 		subModule2: {
+// 			state: {},
+// 			getters: {},
+// 			mutations: {},
+// 			actions: {},
+//    }
+// 	}
 export default class ModuleCollection {
   constructor (rawRootModule) {
     // register root module (Vuex.Store options)
@@ -32,16 +52,40 @@ export default class ModuleCollection {
 
     const newModule = new Module(rawModule, runtime)
     if (path.length === 0) {
+			// 第一次递归调用走这里，此时的newModule如下
+			// {
+			// 	runtime: false,
+			// 	state: {},
+			// 	_children:{},
+			// 	_rawModule: rawRootModule,
+			// 	namespaced: false
+			// }
       this.root = newModule
     } else {
+			// 第二次递归调用走这里，此时的newModule如下
+			// {
+			// 	runtime: false,
+			// 	state: {},
+			// 	_children: {subModule1、 subModule1,},
+			// 	_rawModule: subModule1、 subModule1,
+			// 	namespaced: false
+			// }
+			// path.slice(0, -1)得到了一个空数组[]
+			// 所以得到的parent是this.root，也就是第一次递归时new Module产生的结果
       const parent = this.get(path.slice(0, -1))
+			// addChild就是往parent的_children对象上添加newModule
       parent.addChild(path[path.length - 1], newModule)
     }
 
+		// 第二次递归调用走这里，不存在moudles了。所以 递归暂定的
     // register nested modules
     if (rawModule.modules) {
       forEachValue(rawModule.modules, (rawChildModule, key) => {
+				// 程序开始变得复杂了，开始递归调用了
         this.register(path.concat(key), rawChildModule, runtime)
+
+				// this.register(['subModule1'], subModule1, runtime)
+				// this.register(['subModule2'], subModule2, runtime)
       })
     }
   }

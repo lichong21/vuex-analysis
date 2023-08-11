@@ -10,6 +10,10 @@ export class Store {
     // Auto install if it is not done yet and `window` has `Vue`.
     // To allow users to avoid auto-installation in some cases,
     // this code should be placed here. See #731
+		// 自动安装Vuex。
+		// 在Vue项目中，如果你new Store的情况，没有执行Vue.use(vuex).
+		// 那么Vuex在内部会自动检测并执行Vue.use(vuex), 也就是install。
+		// Vue.use(vuex)的本质就是执行vuex的install方法，
     if (!Vue && typeof window !== 'undefined' && window.Vue) {
       install(window.Vue)
     }
@@ -20,26 +24,41 @@ export class Store {
       assert(this instanceof Store, `store must be called with the new operator.`)
     }
 
+		// 默认开始 非严格模式
     const {
       plugins = [],
       strict = false
     } = options
 
+		// options：就是我们在执行new Vuex.Store(options)时传入的参数。
+
     // store internal state
-    this._committing = false
+		// 通过_committing来标识是否是在提交mutation。默认为false。只在严格模式下啊有意义
+		this._committing = false
+		// 通过Object.create(null)创建一个空对象，这个对象没有原型链，也就是没有继承Object.prototype上的属性和方法。
+		// 分别初始化：_actions，_mutations，_wrappedGetters，_modulesNamespaceMap，_makeLocalGettersCache这五个对象。
     this._actions = Object.create(null)
-    this._actionSubscribers = []
     this._mutations = Object.create(null)
     this._wrappedGetters = Object.create(null)
-    this._modules = new ModuleCollection(options)
     this._modulesNamespaceMap = Object.create(null)
+		this._makeLocalGettersCache = Object.create(null)
+		
+		// 初始化下边这几个对象
     this._subscribers = []
+		this._actionSubscribers = []
     this._watcherVM = new Vue()
-    this._makeLocalGettersCache = Object.create(null)
+		this._modules = new ModuleCollection(options)
+   
 
     // bind commit and dispatch to self
+		// 构造函数内部的this指向的就是自己的实例
+		// 此时的store就是我们new Vuex.Store(options)时的实例
     const store = this
+		// 解构出来的dispatch和commit是store实例的原型上的方法
     const { dispatch, commit } = this
+		// 往自己实例上挂载dispatch和commit方法
+		// 这里的dispatch和commit方法底层调用的还是原型上的方法
+		// 通过call改变了this指向，让dispatch和commit方法内部的this永远指向store实例
     this.dispatch = function boundDispatch (type, payload) {
       return dispatch.call(store, type, payload)
     }
@@ -89,13 +108,25 @@ export class Store {
     } = unifyObjectStyle(_type, _payload, _options)
 
     const mutation = { type, payload }
-    const entry = this._mutations[type]
+		// 通过type获取到对应的mutation。也就是我们在store的模块化Module中的不同模块的mutations对象中声明方法。
+		// entry为什么会是一个数组呢？因为不同模块中可以出现同名的mutation方法，所以这里是一个数组。
+		const entry = this._mutations[type]
     if (!entry) {
       if (__DEV__) {
         console.error(`[vuex] unknown mutation type: ${type}`)
       }
       return
     }
+		// 通过commit方法触发mutation方法，这里的handler就是我们在store的模块化Module中的不同模块的mutations对象中声明的方法。
+		// entry.forEach((handler) => handler(payload))
+		// 本质就是要完成上面这一个操作。遍历entry数组，然后执行每一个handler方法。
+		// 但是为什么要放到_withCommit方法中呢？因为我们在严格模式下，不允许直接修改state，所以要放到_withCommit方法中。
+
+		// witchCommit 这个机制只对严格模式有用。如果不开启严格模式的话，可以忽略它的作用
+
+		// 严格模式下。我们对state有watch监听。
+		// 我们在执行mutation方法时，会改变state的值，当state改变时，会触发watch的回调函数，在回调函数中，判断_committing为false的话，就会抛错。
+		// 所以withCommit是严格模式下的一种处理机制，在每次执行mutation方法时，都会把_committing置为true，执行完后再置为false。如果用户直接通过state.xx = xx的赋值方式来操作state，这个时候因为——committing为false，就会抛错，中断程序的执行。
     this._withCommit(() => {
       entry.forEach(function commitIterator (handler) {
         handler(payload)
@@ -119,6 +150,7 @@ export class Store {
 
   dispatch (_type, _payload) {
     // check object-style dispatch
+		// 同commit部分的处理
     const {
       type,
       payload
@@ -522,6 +554,13 @@ function getNestedState (state, path) {
   return path.reduce((state, key) => state[key], state)
 }
 
+// 格式化参数
+// 对于commit和disspatch方法，我们可以传入一个对象，也可以传入两个参数.  第三个参数是options，我们可以暂时先忽略，所以我们只需要处理两个参数的情况。
+// 如果传入的第一个参数是一个对象，那么我们就把这个对象解构出来，得到type和payload。
+// 如果传入的第一个参数不是一个对象，那么我们就把这个参数作为type，把第二个参数作为payload。
+// 最后返回一个对象，这个对象包含type，payload，options三个属性。
+// 这样我们就可以在commit和dispatch方法内部统一处理参数了。
+// 举个例子：store.commit({type: 'add', a: 1,  b:2})  <==>  store.commit('add',  {a:1,  b:2})  这两个是等价的
 function unifyObjectStyle (type, payload, options) {
   if (isObject(type) && type.type) {
     options = payload
